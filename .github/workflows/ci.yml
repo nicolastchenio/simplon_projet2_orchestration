@@ -46,3 +46,25 @@ jobs:
         run: |
           echo "Scanning for hardcoded secrets..."
           grep -r --exclude-dir=.git -n -E '([A-Za-z0-9_]{20,})' .
+
+      # 6️⃣ Générer le badge de couverture dynamique
+      - name: Generate dynamic coverage badge
+        run: |
+          # Installer xmlstarlet pour parser XML
+          sudo apt-get update && sudo apt-get install -y xmlstarlet
+
+          # Générer le rapport XML
+          uv run pytest --cov=app --cov-report=xml
+
+          # Lire le coverage total depuis coverage.xml
+          TOTAL_COVERAGE=$(xmlstarlet sel -t -v "/coverage/@line-rate" coverage.xml)
+          PERCENT=$(echo "$TOTAL_COVERAGE*100" | bc | cut -d'.' -f1)
+
+          # Créer un fichier JSON pour Shields.io
+          echo "{ \"schemaVersion\": 1, \"label\": \"coverage\", \"message\": \"$PERCENT%\", \"color\": \"green\" }" > coverage.json
+
+      - name: Upload coverage badge JSON
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-badge
+          path: coverage.json
