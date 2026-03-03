@@ -1,0 +1,8 @@
+.venv
+docs
+public
+tests
+.github
+.pytest_cache
+.ruff_cache
+htmlcov
