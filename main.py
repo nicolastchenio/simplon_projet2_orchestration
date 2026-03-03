@@ -1,4 +1,5 @@
 def main():
+    """Run the CLI entry point."""
     print("Hello from simplon-projet1-mlop!")
 
 

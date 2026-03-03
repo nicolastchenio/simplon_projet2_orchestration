@@ -1,8 +1,9 @@
 import pandas as pd
-from modules.mon_module import add, sub, square, print_data
+from modules.mon_module import add, print_data, square, sub
 
 
 def main():
+    """Run the application."""
     df = pd.read_csv("app/moncsv.csv")
 
     print(add(2, 3))

@@ -1,11 +1,11 @@
-"""Business logic module containing basic mathematical operations and
+"""Business logic module containing basic mathematical operations.
+
 DataFrame utilities.
 """
 
 from typing import Union
 
 import pandas as pd
-
 
 Number = Union[int, float]
 
@@ -19,6 +19,7 @@ def add(a: Number, b: Number) -> Number:
 
     Returns:
         Number: Sum of a and b.
+
     """
     return a + b
 
@@ -32,6 +33,7 @@ def sub(a: Number, b: Number) -> Number:
 
     Returns:
         Number: Result of a minus b.
+
     """
     return a - b
 
@@ -44,6 +46,7 @@ def square(a: Number) -> Number:
 
     Returns:
         Number: Square of a.
+
     """
     return a * a
 
@@ -56,6 +59,7 @@ def print_data(df: pd.DataFrame) -> int:
 
     Returns:
         int: Number of rows in the DataFrame.
+
     """
     print(df)
     return len(df)
