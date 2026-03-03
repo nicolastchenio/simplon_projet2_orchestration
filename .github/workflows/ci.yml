@@ -37,9 +37,9 @@ jobs:
       - name: Lint code with Ruff
         run: uv run ruff check .
 
-      # 4️⃣ Tests unitaires avec pytest et couverture
+      # 4️⃣ Tests unitaires avec pytest et couverture (avec rapport XML)
       - name: Run tests with pytest
-        run: uv run pytest --cov=app --cov-report=term-missing
+        run: uv run pytest --cov=app --cov-report=term-missing --cov-report=xml
 
       # 5️⃣ Audit de sécurité pour détecter les secrets
       - name: Secret scanning
