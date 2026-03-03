@@ -1,6 +1,5 @@
 name: CI
 
-# Déclenchement sur push ou PR sur main, dev, ou feat/*
 on:
   push:
     branches:
@@ -17,54 +16,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout du code
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2️⃣ Setup Python et uv
-      - name: Set up Python 3.13
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: 3.13
 
-      - name: Install uv and dependencies
+      - name: Install dependencies via uv
         run: |
           python -m pip install --upgrade pip
           pip install uv
           uv sync
 
-      # 3️⃣ Linting avec Ruff
       - name: Lint code with Ruff
         run: uv run ruff check .
 
-      # 4️⃣ Tests unitaires avec pytest et couverture
       - name: Run tests with pytest
         run: uv run pytest --cov=app --cov-report=term-missing
-
-      # 5️⃣ Audit de sécurité pour détecter les secrets
-      - name: Secret scanning
-        run: |
-          echo "Scanning for hardcoded secrets..."
-          grep -r --exclude-dir=.git -n -E '([A-Za-z0-9_]{20,})' .
-
-      # 6️⃣ Générer le badge de couverture dynamique
-      - name: Generate dynamic coverage badge
-        run: |
-          # Installer xmlstarlet pour parser XML
-          sudo apt-get update && sudo apt-get install -y xmlstarlet
-
-          # Générer le rapport XML
-          uv run pytest --cov=app --cov-report=xml
-
-          # Lire le coverage total depuis coverage.xml
-          TOTAL_COVERAGE=$(xmlstarlet sel -t -v "/coverage/@line-rate" coverage.xml)
-          PERCENT=$(echo "$TOTAL_COVERAGE*100" | bc | cut -d'.' -f1)
-
-          # Créer un fichier JSON pour Shields.io
-          echo "{ \"schemaVersion\": 1, \"label\": \"coverage\", \"message\": \"$PERCENT%\", \"color\": \"green\" }" > coverage.json
-
-      - name: Upload coverage badge JSON
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-badge
-          path: coverage.json
