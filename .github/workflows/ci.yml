@@ -39,31 +39,7 @@ jobs:
 
       # 4️⃣ Tests unitaires avec pytest et couverture
       - name: Run tests with pytest
-        run: |
-          uv run pytest --cov=app --cov-report=term-missing
-          # 2. On extrait le score avec uv run
-          COVERAGE=$(uv run python -m coverage report --format=total)
-          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
-          
-          # 3. On calcule la couleur selon le score
-          if [ "$COVERAGE" -ge 80 ]; then
-            echo "COLOR=green" >> $GITHUB_ENV
-          elif [ "$COVERAGE" -ge 50 ]; then
-            echo "COLOR=orange" >> $GITHUB_ENV
-          else
-            echo "COLOR=red" >> $GITHUB_ENV
-          fi
-
-      - name: Update Gist Badge
-        uses: Schneegans/dynamic-badges-action@v1.7.0
-        with:
-            auth: ${{ secrets.GIST_SECRET }}
-            gistID: feb812d57e72aa9f86cb3bdbff5e2c1d
-            filename: coverage_mlops-projet1.json
-            label: Coverage
-            message: ${{ env.COVERAGE }}%
-            color: ${{ env.COLOR }} # La couleur est maintenant dynamique !
-
+        run: uv run pytest --cov=app --cov-report=term-missing
 
       # 5️⃣ Audit de sécurité pour détecter les secrets
       - name: Secret scanning
