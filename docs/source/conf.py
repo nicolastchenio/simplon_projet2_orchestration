@@ -38,3 +38,5 @@ exclude_patterns = []
 
 html_theme = 'furo'
 html_static_path = ['_static']
+tml_logo = "_static/img/logo.png"
+tml_title = "Documentation - projet1 simplon mlops"
