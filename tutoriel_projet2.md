@@ -470,7 +470,55 @@ set PYTHONPATH=app_api
 python -m pytest tests/ -v
 ```
 
+## phase B ##
+### Variables d’environnement et hygiène ###
+1. Créer un fichier .env dans la racine du projet (ou dans app_api) pour stocker les paramètres sensibles, par exemple :
+```
+# .env
+API_HOST=127.0.0.1
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=mydb
+POSTGRES_PORT=5432
+```
 
+2. Créer .env.example (version template à partager sur GitHub) :
+```
+# .env.example
+API_HOST=
+POSTGRES_USER=
+POSTGRES_PASSWORD=
+POSTGRES_DB=
+POSTGRES_PORT=
+```
+3. Mettre à jour ton code pour utiliser ces variables :
+- Dans app_api/modules/connect.py :
+```
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
+DATABASE_URL = (
+    f"postgresql+psycopg2://{os.getenv('POSTGRES_USER')}:"
+    f"{os.getenv('POSTGRES_PASSWORD')}@db:{os.getenv('POSTGRES_PORT', 5432)}/"
+    f"{os.getenv('POSTGRES_DB')}"
+)
 
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+- Pour le front (app_front/0_insert.py et 1_read.py) :
+```
+API_HOST = os.getenv("API_HOST", "127.0.0.1")
+API_URL = f"http://{API_HOST}:8000/data"
+```
+
+- Mettre .env et .venv dans .gitignore et .dockignore pour éviter de versionner les secrets ou les environnements locaux.
 

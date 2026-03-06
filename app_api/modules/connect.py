@@ -1,13 +1,14 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# SQLite en local pour Phase A
-DATABASE_URL = "sqlite:///./app_api/data/data.db"
-
-engine = create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
+DATABASE_URL = (
+    f"postgresql+psycopg2://{os.getenv('POSTGRES_USER')}:"
+    f"{os.getenv('POSTGRES_PASSWORD')}@db:{os.getenv('POSTGRES_PORT', 5432)}/"
+    f"{os.getenv('POSTGRES_DB')}"
 )
 
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
