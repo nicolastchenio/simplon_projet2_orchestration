@@ -2,9 +2,8 @@ import streamlit as st
 import requests
 import os
 
-# Récupération de l'hôte de l'API
-API_HOST = os.getenv("API_HOST", "127.0.0.1")
-API_URL = f"http://{API_HOST}:8000/data"
+# URL de l'API dans Docker
+API_URL = f"http://api:8000/data"
 
 st.title("Insertion de données")
 st.write("Ajouter des données via l'API.")

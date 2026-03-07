@@ -1,26 +1,35 @@
 import streamlit as st
 import requests
 import pandas as pd
-import os
 
-# Récupération de l'hôte de l'API
-API_HOST = os.getenv("API_HOST", "127.0.0.1")
-API_URL = f"http://{API_HOST}:8000/data"
+# URL de l'API dans Docker
+API_URL = "http://api:8000/data"
 
 st.title("Lecture des données")
 st.write("Récupération des données depuis l'API.")
 
-if st.button("Afficher les données"):
-    try:
-        response = requests.get(API_URL)
+# bouton de rafraîchissement
+if st.button("Actualiser les données"):
+    st.experimental_rerun()
 
-        if response.status_code == 200:
-            data = response.json()
-            df = pd.DataFrame(data.get("data", []))
-            st.success(data.get("message", "Données récupérées"))
+try:
+    response = requests.get(API_URL)
+
+    if response.status_code == 200:
+        data = response.json()
+
+        df = pd.DataFrame(data.get("data", []))
+
+        st.success(data.get("message", "Données récupérées"))
+
+        if not df.empty:
             st.dataframe(df)
         else:
-            st.error("Erreur API")
+            st.warning("Aucune donnée disponible")
 
-    except Exception as e:
-        st.error(f"Erreur : {e}")
+    else:
+        st.error(f"Erreur API : {response.status_code}")
+        st.text(response.text)
+
+except requests.exceptions.RequestException as e:
+    st.error(f"Erreur de connexion à l'API : {e}")

@@ -1,28 +1,80 @@
-from fastapi import FastAPI
-import pandas as pd
-from maths.mon_module import add, sub, square, print_data
-from modules import crud
 import os
+from fastapi import FastAPI
+from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, Integer, Float, MetaData, Table, select
+from sqlalchemy.orm import sessionmaker
 
-app = FastAPI(title="API Phase A")
+from maths.mon_module import add, sub, square, print_data
 
-BASE_DIR = os.path.dirname(__file__)
-CSV_PATH = os.path.join(BASE_DIR, "data", "moncsv.csv")
-# CSV_PATH = "data/moncsv.csv"
+# -------------------------
+# Configuration FastAPI
+# -------------------------
+app = FastAPI(title="API avec PostgreSQL")
 
+# -------------------------
+# Base de données
+# -------------------------
+DATABASE_URL = os.getenv("DATABASE_URL")  # pris depuis le .env
+
+engine = create_engine(DATABASE_URL)
+metadata = MetaData()
+
+# Définition de la table "data"
+data_table = Table(
+    "data",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("value", Float, nullable=False)
+)
+
+# Création de la table si elle n'existe pas
+metadata.create_all(engine)
+
+SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+
+# -------------------------
+# Modèle Pydantic
+# -------------------------
+class DataInput(BaseModel):
+    value: float
+
+# -------------------------
+# Routes
+# -------------------------
 @app.get("/")
 def root():
     return {"message": "API opérationnelle"}
 
+
 @app.post("/data")
-def save_data():
-    df = crud.save_csv_to_db(CSV_PATH)
-    return {"message": f"{len(df)} lignes sauvegardées", "data": df.to_dict(orient="records")}
+def save_data(data: DataInput):
+    """Ajoute une nouvelle ligne dans PostgreSQL"""
+    session = SessionLocal()
+    try:
+        insert_stmt = data_table.insert().values(value=data.value)
+        session.execute(insert_stmt)
+        session.commit()
+        return {"message": "1 ligne ajoutée"}
+    finally:
+        session.close()
+
 
 @app.get("/data")
 def get_data():
-    df = crud.read_csv_from_db(CSV_PATH)
-    return {"message": f"{len(df)} lignes récupérées", "data": df.to_dict(orient="records")}
+    """Récupère toutes les lignes de PostgreSQL"""
+    session = SessionLocal()
+    try:
+        select_stmt = select(data_table)
+        result = session.execute(select_stmt)
+        rows = [{"id": r.id, "value": r.value} for r in result]
+        return jsonable_encoder({
+            "message": f"{len(rows)} lignes récupérées",
+            "data": rows
+        })
+    finally:
+        session.close()
+
 
 @app.get("/math")
 def test_math():
@@ -31,7 +83,13 @@ def test_math():
         "sub": sub(5,2),
         "square": square(4)
     }
-    df = pd.read_csv(CSV_PATH)
-    n_rows = print_data(df)
-    results["rows_in_csv"] = n_rows
+
+    # Compter le nombre de lignes en BDD
+    session = SessionLocal()
+    try:
+        count = session.execute(select(data_table)).rowcount
+        results["rows_in_db"] = count
+    finally:
+        session.close()
+
     return results

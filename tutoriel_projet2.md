@@ -522,3 +522,493 @@ API_URL = f"http://{API_HOST}:8000/data"
 
 - Mettre .env et .venv dans .gitignore et .dockignore pour éviter de versionner les secrets ou les environnements locaux.
 
+## phase C ##
+### Orchestration Docker Compose ###
+#### Étape C.1 — Préparer le docker-compose.yml pour le développement ####
+
+- Crée un fichier docker-compose.yml à la racine du projet (si ce n’est pas déjà fait).
+- Pour commencer, on va définir trois services : api, front, db
+```
+services:
+  # -------------------- API --------------------
+  api:
+    build:
+      context: ./app_api
+    container_name: api_service
+    env_file:
+      - .env
+    ports:
+      - "${API_PORT}:8000"
+    networks:
+      - api-db
+      - front-api
+    depends_on:
+      - db
+
+  # -------------------- Frontend --------------------
+  front:
+    build:
+      context: ./app_front
+    container_name: front_service
+    env_file:
+      - .env
+    ports:
+      - "${FRONT_PORT}:8501"
+    networks:
+      - front-api
+    depends_on:
+      - api
+
+  # -------------------- PostgreSQL --------------------
+  db:
+    image: postgres:15
+    container_name: db_service
+    env_file:
+      - .env
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - api-db
+
+# -------------------- Volumes --------------------
+volumes:
+  pgdata:
+
+# -------------------- Networks --------------------
+networks:
+  front-api:
+  api-db:
+```
+
+#### Étape C.2 — adapter le Front et l’API pour utiliser les noms des services Docker comme hôtes, plutôt que 127.0.0.1 ####
+- app_front/pages/0_insert.py
+
+```
+import streamlit as st
+import requests
+import os
+
+# URL de l'API dans Docker
+API_URL = f"http://api:8000/data"
+
+st.title("Insertion de données")
+st.write("Ajouter des données via l'API.")
+
+name = st.text_input("Nom")
+value = st.number_input("Valeur", min_value=0)
+
+if st.button("Envoyer"):
+    try:
+        payload = {"name": name, "value": value}
+        response = requests.post(API_URL, json=payload)
+
+        if response.status_code == 200:
+            data = response.json()
+            st.success(data["message"])
+        else:
+            st.error(f"Erreur API : {response.status_code}")
+
+    except Exception as e:
+        st.error(f"Erreur : {e}")
+```
+
+app_front/pages/1_read.py
+```
+import streamlit as st
+import requests
+import pandas as pd
+
+# URL de l'API dans Docker
+API_URL = f"http://api:8000/data"
+
+st.title("Lecture des données")
+st.write("Récupération des données depuis l'API.")
+
+if st.button("Afficher les données"):
+    try:
+        response = requests.get(API_URL)
+
+        if response.status_code == 200:
+            data = response.json()
+            df = pd.DataFrame(data.get("data", []))
+            st.success(data.get("message", "Données récupérées"))
+            st.dataframe(df)
+        else:
+            st.error(f"Erreur API : {response.status_code}")
+
+    except Exception as e:
+        st.error(f"Erreur : {e}")
+```
+#### Étape C.3 — creer les Dockerfile ###
+- Dockerfile pour l’API (app_api/Dockerfile)
+```
+# Base image Python
+FROM python:3.11-slim
+
+# Copier uv depuis l’image officielle
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Définir le répertoire de travail
+WORKDIR /app
+
+# Copier les fichiers de dépendances
+COPY pyproject.toml uv.lock /app/
+
+# Installer les dépendances avec uv pip dans l’environnement système
+RUN uv pip install --system --no-cache -r pyproject.toml
+
+# Copier tout le code de l'API
+COPY . /app
+
+# Commande pour lancer l'API
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+- Dockerfile pour le Frontend (app_front/Dockerfile)
+```
+# Base image Python
+FROM python:3.11-slim
+
+# Définir le répertoire de travail
+WORKDIR /app
+
+# Copier uv depuis l'image officielle
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Copier les fichiers de dépendances
+COPY pyproject.toml uv.lock /app/
+
+# Installer les dépendances avec uv pip
+RUN uv pip install --system --no-cache -r pyproject.toml
+
+# Copier tout le code du front
+COPY . /app
+
+# Exposer le port
+EXPOSE 8501
+
+# Commande pour lancer Streamlit
+# --server.headless=true à Streamlit pour éviter les alertes de sécurité et permettre le fonctionnement dans un conteneur
+CMD ["uv", "streamlit", "run", "main.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
+```
+
+#### Étape C.4 — tester le docker-compose en local ###
+pour vérifier que :
+- Le front voit l’API
+- L’API peut accéder à PostgreSQL
+- Les données persistent via le volume pgdata
+
+Penser a demarrer docker sur son ordinateur en local.
+
+1. Nettoyer l’existant
+- Arrête tous les conteneurs en cours (si tu en as) :
+```
+docker-compose down
+```
+
+- Supprime les volumes temporaires pour être sûr de repartir propre :
+```
+docker volume ls 
+docker volume rm simplon_projet2_orchestration_pgdata
+```
+
+PENSER AUSSI A Supprimer les .venv de app_front et app_api car pas besoin avec docker
+
+2. Lancer Docker Compose
+Dans le dossier de ton projet (où est ton docker-compose.yml) :
+```
+docker-compose up --build
+```
+
+Docker va builder l’API et le front
+Docker va créer le conteneur PostgreSQL et le volume pour persister les données
+Les réseaux front-api et api-db seront créés
+
+À ce stade, regarde les logs pour t’assurer que :
+
+L’API démarre (Uvicorn running on http://0.0.0.0:8000)
+PostgreSQL démarre sans erreur (database system is ready to accept connections)
+Streamlit démarre (You can now view your Streamlit app in your browser)
+
+3. Tester la communication Front → API
+- Ouvre ton navigateur :
+http://localhost:8501
+
+
+- Teste la page d’insertion (0_insert) : ajoute une valeur, clique sur Envoyer.
+-Teste la page de lecture (1_read) : récupère les données et vérifie que ton CSV / POST fonctionne via l’API.
+
+note : il y avait des bug j ai donc du modifier le code notamment pour passer avec la base de donnee et non plus avec le document csv  :
+
+app_api > main.py :
+```
+import os
+from fastapi import FastAPI
+from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, Integer, Float, MetaData, Table, select
+from sqlalchemy.orm import sessionmaker
+
+from maths.mon_module import add, sub, square, print_data
+
+# -------------------------
+# Configuration FastAPI
+# -------------------------
+app = FastAPI(title="API avec PostgreSQL")
+
+# -------------------------
+# Base de données
+# -------------------------
+DATABASE_URL = os.getenv("DATABASE_URL")  # pris depuis le .env
+
+engine = create_engine(DATABASE_URL)
+metadata = MetaData()
+
+# Définition de la table "data"
+data_table = Table(
+    "data",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("value", Float, nullable=False)
+)
+
+# Création de la table si elle n'existe pas
+metadata.create_all(engine)
+
+SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+
+# -------------------------
+# Modèle Pydantic
+# -------------------------
+class DataInput(BaseModel):
+    value: float
+
+# -------------------------
+# Routes
+# -------------------------
+@app.get("/")
+def root():
+    return {"message": "API opérationnelle"}
+
+
+@app.post("/data")
+def save_data(data: DataInput):
+    """Ajoute une nouvelle ligne dans PostgreSQL"""
+    session = SessionLocal()
+    try:
+        insert_stmt = data_table.insert().values(value=data.value)
+        session.execute(insert_stmt)
+        session.commit()
+        return {"message": "1 ligne ajoutée"}
+    finally:
+        session.close()
+
+
+@app.get("/data")
+def get_data():
+    """Récupère toutes les lignes de PostgreSQL"""
+    session = SessionLocal()
+    try:
+        select_stmt = select(data_table)
+        result = session.execute(select_stmt)
+        rows = [{"id": r.id, "value": r.value} for r in result]
+        return jsonable_encoder({
+            "message": f"{len(rows)} lignes récupérées",
+            "data": rows
+        })
+    finally:
+        session.close()
+
+
+@app.get("/math")
+def test_math():
+    results = {
+        "add": add(2,3),
+        "sub": sub(5,2),
+        "square": square(4)
+    }
+
+    # Compter le nombre de lignes en BDD
+    session = SessionLocal()
+    try:
+        count = session.execute(select(data_table)).rowcount
+        results["rows_in_db"] = count
+    finally:
+        session.close()
+
+    return results
+```
+
+app_front > 0_insert.py :
+```
+import streamlit as st
+import requests
+import os
+
+# URL de l'API dans Docker
+API_URL = f"http://api:8000/data"
+
+st.title("Insertion de données")
+st.write("Ajouter des données via l'API.")
+
+# L'utilisateur ne fournit que la valeur
+value = st.number_input("Valeur", min_value=0)
+
+if st.button("Envoyer"):
+    try:
+        # On envoie seulement la valeur, l'id sera géré côté backend
+        payload = {"value": value}
+        response = requests.post(API_URL, json=payload)
+
+        if response.status_code == 200:
+            data = response.json()
+            st.success(data["message"])
+        else:
+            st.error(f"Erreur API ({response.status_code})")
+
+    except Exception as e:
+        st.error(f"Erreur : {e}")
+```
+
+app_front > 1_read.py :
+```
+import streamlit as st
+import requests
+import pandas as pd
+
+# URL de l'API dans Docker
+API_URL = "http://api:8000/data"
+
+st.title("Lecture des données")
+st.write("Récupération des données depuis l'API.")
+
+# bouton de rafraîchissement
+if st.button("Actualiser les données"):
+    st.experimental_rerun()
+
+try:
+    response = requests.get(API_URL)
+
+    if response.status_code == 200:
+        data = response.json()
+
+        df = pd.DataFrame(data.get("data", []))
+
+        st.success(data.get("message", "Données récupérées"))
+
+        if not df.empty:
+            st.dataframe(df)
+        else:
+            st.warning("Aucune donnée disponible")
+
+    else:
+        st.error(f"Erreur API : {response.status_code}")
+        st.text(response.text)
+
+except requests.exceptions.RequestException as e:
+    st.error(f"Erreur de connexion à l'API : {e}")
+```
+
+modules > crud.py :
+
+```
+# modules/crud.py
+from sqlalchemy import create_engine, text
+import pandas as pd
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL")  # à définir dans .env
+
+engine = create_engine(DATABASE_URL, echo=False)
+
+
+def save_value_to_db(value: float):
+    """Insère une ligne dans la table data."""
+    with engine.begin() as conn:
+        conn.execute(
+            text("INSERT INTO data(value) VALUES (:value)"),
+            {"value": value}
+        )
+
+
+def read_data_from_db() -> pd.DataFrame:
+    """Lit toutes les données depuis la table data."""
+    with engine.connect() as conn:
+        df = pd.read_sql("SELECT * FROM data", conn)
+    return df
+
+
+def init_db():
+    """Créer la table si elle n'existe pas."""
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+                CREATE TABLE IF NOT EXISTS data (
+                    id SERIAL PRIMARY KEY,
+                    value FLOAT NOT NULL
+                )
+            """)
+        )
+```
+
+app_api > pyproject.toml :
+
+```
+[project]
+name = "app_api"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi>=0.135.1",
+    "uvicorn>=0.41.0",
+    "sqlalchemy>=2.0.48",
+    "pydantic>=2.12.5",
+    "pandas>=3.0.1",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "httpx>=0.28.1",
+    "psycopg2-binary>=2.9.7"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+```
+
+.env :
+
+```
+# Database
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=mydb
+POSTGRES_PORT=5432
+
+# API & Front
+API_PORT=8000
+FRONT_PORT=8501
+API_HOST=api
+
+# SQLAlchemy connection string
+DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/mydb
+
+```
+
+4. Tester la persistance des données
+- Ajoute quelques données via le front.
+- Arrête les conteneurs :
+```
+docker-compose down
+```
+
+- Relance les conteneurs :
+```
+docker-compose up
+```
+
+Vérifie dans le front que les données ajoutées sont toujours là.
+Si oui, le volume pgdata fonctionne correctement et PostgreSQL conserve les données.
+

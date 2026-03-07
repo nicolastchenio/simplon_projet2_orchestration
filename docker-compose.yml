@@ -1,0 +1,51 @@
+services:
+  # -------------------- API --------------------
+  api:
+    build:
+      context: ./app_api
+    container_name: api_service
+    env_file:
+      - .env
+    ports:
+      - "${API_PORT}:8000"
+    networks:
+      - api-db
+      - front-api
+    depends_on:
+      - db
+
+  # -------------------- Frontend --------------------
+  front:
+    build:
+      context: ./app_front
+    container_name: front_service
+    env_file:
+      - .env
+    ports:
+      - "${FRONT_PORT}:8501"
+    networks:
+      - front-api
+    depends_on:
+      - api
+
+  # -------------------- PostgreSQL --------------------
+  db:
+    image: postgres:15
+    container_name: db_service
+    env_file:
+      - .env
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - api-db
+
+# -------------------- Volumes --------------------
+volumes:
+  pgdata:
+
+# -------------------- Networks --------------------
+networks:
+  front-api:
+  api-db:
